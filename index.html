@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vue Bootstrap Lab</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+</head>
+<body>
+    <div id="app"></div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue/3.3.4/vue.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/vue-router/4.2.4/vue-router.global.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        const { createApp, ref, reactive, computed, watch, onMounted } = Vue;
+        const { createRouter, createWebHashHistory } = VueRouter;
+
+        // Global state for cart
+        const cartStore = reactive({
+            items: JSON.parse(localStorage.getItem('cart') || '[]'),
+            
+            addToCart(product) {
+                const existingItem = this.items.find(item => item.id === product.id);
+                if (existingItem) {
+                    existingItem.quantity++;
+                } else {
+                    this.items.push({
+                        id: product.id,
+                        title: product.title,
+                        price: product.price,
+                        image: product.image,
+                        quantity: 1
+                    });
+                }
+                this.saveToStorage();
+            },
+            
+            removeFromCart(productId) {
+                const index = this.items.findIndex(item => item.id === productId);
+                if (index > -1) {
+                    this.items.splice(index, 1);
+                    this.saveToStorage();
+                }
+            },
+            
+            updateQuantity(productId, newQuantity) {
+                const item = this.items.find(item => item.id === productId);
+                if (item) {
+                    if (newQuantity <= 0) {
+                        this.removeFromCart(productId);
+                    } else {
+                        item.quantity = newQuantity;
+                        this.saveToStorage();
+                    }
+                }
+            },
+            
+            getTotalPrice() {
+                return this.items.reduce((total, item) => total + (item.price * item.quantity), 0);
+            },
+            
+            getCartCount() {
+                return this.items.reduce((total, item) => total + item.quantity, 0);
+            },
+            
+            saveToStorage() {
+                localStorage.setItem('cart', JSON.stringify(this.items));
+            }
+        });
+
+        // Home Component
+        const Home = {
+            template: `
+                <div class="container mt-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="jumbotron bg-primary text-white p-5 rounded mb-4">
+                                <h1 class="display-4">Welcome to Vue Shop</h1>
+                                <p class="lead">Your one-stop destination for amazing products!</p>
+                                <hr class="my-4">
+                                <p class="mb-4">Discover our wide range of high-quality products at unbeatable prices. From electronics to fashion, we have everything you need.</p>
+                                <router-link to="/products" class="btn btn-light btn-lg">
+                                    <i class="fas fa-shopping-bag me-2"></i>Start Shopping
+                                </router-link>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shipping-fast fa-3x text-primary mb-3"></i>
+                                    <h5 class="card-title">Fast Shipping</h5>
+                                    <p class="card-text">Get your orders delivered quickly with our express shipping service.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-shield-alt fa-3x text-success mb-3"></i>
+                                    <h5 class="card-title">Secure Payment</h5>
+                                    <p class="card-text">Shop with confidence using our secure payment system.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-4">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    <i class="fas fa-headset fa-3x text-info mb-3"></i>
+                                    <h5 class="card-title">24/7 Support</h5>
+                                    <p class="card-text">Our customer support team is here to help you anytime.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Products Component
+        const Products = {
+            setup() {
+                const products = ref([]);
+                const filteredProducts = ref([]);
+                const searchQuery = ref('');
+                const loading = ref(true);
+                const error = ref(null);
+
+                const fetchProducts = async () => {
+                    try {
+                        loading.value = true;
+                        const response = await fetch('https://fakestoreapi.com/products');
+                        if (!response.ok) throw new Error('Failed to fetch products');
+                        const data = await response.json();
+                        products.value = data;
+                        filteredProducts.value = data;
+                    } catch (err) {
+                        error.value = err.message;
+                    } finally {
+                        loading.value = false;
+                    }
+                };
+
+                // Watcher for search functionality
+                watch(searchQuery, (newQuery) => {
+                    if (newQuery.trim() === '') {
+                        filteredProducts.value = products.value;
+                    } else {
+                        filteredProducts.value = products.value.filter(product =>
+                            product.title.toLowerCase().includes(newQuery.toLowerCase()) ||
+                            product.category.toLowerCase().includes(newQuery.toLowerCase())
+                        );
+                    }
+                });
+
+                onMounted(fetchProducts);
+
+                const addToCart = (product) => {
+                    cartStore.addToCart(product);
+                    // Show success message (you could use a toast library)
+                    alert(`${product.title} added to cart!`);
+                };
+
+                return {
+                    products,
+                    filteredProducts,
+                    searchQuery,
+                    loading,
+                    error,
+                    addToCart
+                };
+            },
+            template: `
+                <div class="container mt-4">
+                    <div class="row mb-4">
+                        <div class="col-12">
+                            <h2 class="mb-3">Our Products</h2>
+                            <div class="input-group mb-3">
+                                <span class="input-group-text">
+                                    <i class="fas fa-search"></i>
+                                </span>
+                                <input 
+                                    type="text" 
+                                    class="form-control form-control-lg" 
+                                    placeholder="Search products..." 
+                                    v-model="searchQuery"
+                                >
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div v-if="loading" class="text-center">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-3">Loading products...</p>
+                    </div>
+
+                    <!-- Error State -->
+                    <div v-if="error" class="alert alert-danger" role="alert">
+                        <i class="fas fa-exclamation-triangle me-2"></i>
+                        Error: {{ error }}
+                    </div>
+
+                    <!-- Products Grid -->
+                    <div v-if="!loading && !error" class="row">
+                        <div v-if="filteredProducts.length === 0" class="col-12">
+                            <div class="alert alert-info text-center">
+                                <i class="fas fa-search me-2"></i>
+                                No products found matching your search.
+                            </div>
+                        </div>
+                        <div 
+                            v-for="product in filteredProducts" 
+                            :key="product.id" 
+                            class="col-md-6 col-lg-4 mb-4"
+                        >
+                            <div class="card h-100">
+                                <img 
+                                    :src="product.image" 
+                                    :alt="product.title"
+                                    class="card-img-top"
+                                    style="height: 250px; object-fit: contain; padding: 10px;"
+                                >
+                                <div class="card-body d-flex flex-column">
+                                    <h5 class="card-title">{{ product.title }}</h5>
+                                    <p class="card-text flex-grow-1">{{ product.description.substring(0, 100) }}...</p>
+                                    <div class="mt-auto">
+                                        <div class="d-flex justify-content-between align-items-center mb-3">
+                                            <span class="badge bg-secondary">{{ product.category }}</span>
+                                            <span class="h5 mb-0 text-primary">\${{ product.price }}</span>
+                                        </div>
+                                        <button 
+                                            @click="addToCart(product)" 
+                                            class="btn btn-primary w-100"
+                                        >
+                                            <i class="fas fa-cart-plus me-2"></i>Add to Cart
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // About Component
+        const About = {
+            template: `
+                <div class="container mt-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h2 class="mb-0">About Vue Shop</h2>
+                                </div>
+                                <div class="card-body">
+                                    <p class="lead">Welcome to Vue Shop, your premier destination for quality products and exceptional service.</p>
+                                    
+                                    <h4>Our Story</h4>
+                                    <p>Founded in 2024, Vue Shop was created with a simple mission: to provide customers with access to high-quality products at competitive prices. We believe that shopping should be easy, enjoyable, and trustworthy.</p>
+                                    
+                                    <h4>Our Team</h4>
+                                    <div class="row mt-4">
+                                        <div class="col-md-4 text-center mb-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <i class="fas fa-user-circle fa-4x text-primary mb-3"></i>
+                                                    <h5>John Doe</h5>
+                                                    <p class="text-muted">CEO & Founder</p>
+                                                    <p class="small">Leading the vision and strategy of Vue Shop.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-center mb-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <i class="fas fa-user-circle fa-4x text-success mb-3"></i>
+                                                    <h5>Jane Smith</h5>
+                                                    <p class="text-muted">Head of Operations</p>
+                                                    <p class="small">Ensuring smooth operations and customer satisfaction.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4 text-center mb-4">
+                                            <div class="card">
+                                                <div class="card-body">
+                                                    <i class="fas fa-user-circle fa-4x text-info mb-3"></i>
+                                                    <h5>Mike Johnson</h5>
+                                                    <p class="text-muted">Tech Lead</p>
+                                                    <p class="small">Building and maintaining our platform technology.</p>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <h4>Why Choose Us?</h4>
+                                    <ul class="list-group list-group-flush">
+                                        <li class="list-group-item"><i class="fas fa-check text-success me-2"></i>High-quality products from trusted suppliers</li>
+                                        <li class="list-group-item"><i class="fas fa-check text-success me-2"></i>Fast and reliable shipping</li>
+                                        <li class="list-group-item"><i class="fas fa-check text-success me-2"></i>Excellent customer service</li>
+                                        <li class="list-group-item"><i class="fas fa-check text-success me-2"></i>Secure payment processing</li>
+                                        <li class="list-group-item"><i class="fas fa-check text-success me-2"></i>Easy returns and exchanges</li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Cart Component
+        const Cart = {
+            setup() {
+                const updateQuantity = (productId, change) => {
+                    const item = cartStore.items.find(item => item.id === productId);
+                    if (item) {
+                        const newQuantity = item.quantity + change;
+                        cartStore.updateQuantity(productId, newQuantity);
+                    }
+                };
+
+                const removeItem = (productId) => {
+                    if (confirm('Are you sure you want to remove this item from your cart?')) {
+                        cartStore.removeFromCart(productId);
+                    }
+                };
+
+                return {
+                    cartStore,
+                    updateQuantity,
+                    removeItem
+                };
+            },
+            template: `
+                <div class="container mt-4">
+                    <div class="row">
+                        <div class="col-12">
+                            <h2 class="mb-4">Shopping Cart</h2>
+                            
+                            <div v-if="cartStore.items.length === 0" class="text-center">
+                                <div class="card">
+                                    <div class="card-body py-5">
+                                        <i class="fas fa-shopping-cart fa-4x text-muted mb-3"></i>
+                                        <h4>Your cart is empty</h4>
+                                        <p class="text-muted">Add some products to get started!</p>
+                                        <router-link to="/products" class="btn btn-primary">
+                                            <i class="fas fa-shopping-bag me-2"></i>Continue Shopping
+                                        </router-link>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div v-else>
+                                <div class="card">
+                                    <div class="card-body p-0">
+                                        <div class="table-responsive">
+                                            <table class="table table-hover mb-0">
+                                                <thead class="table-dark">
+                                                    <tr>
+                                                        <th>Product</th>
+                                                        <th>Price</th>
+                                                        <th>Quantity</th>
+                                                        <th>Total</th>
+                                                        <th>Actions</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody>
+                                                    <tr v-for="item in cartStore.items" :key="item.id">
+                                                        <td>
+                                                            <div class="d-flex align-items-center">
+                                                                <img 
+                                                                    :src="item.image" 
+                                                                    :alt="item.title"
+                                                                    class="me-3"
+                                                                    style="width: 50px; height: 50px; object-fit: contain;"
+                                                                >
+                                                                <div>
+                                                                    <h6 class="mb-0">{{ item.title }}</h6>
+                                                                </div>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold">\${{ item.price.toFixed(2) }}</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <div class="btn-group" role="group">
+                                                                <button 
+                                                                    @click="updateQuantity(item.id, -1)"
+                                                                    class="btn btn-outline-secondary btn-sm"
+                                                                    :disabled="item.quantity <= 1"
+                                                                >
+                                                                    <i class="fas fa-minus"></i>
+                                                                </button>
+                                                                <span class="btn btn-outline-secondary btn-sm disabled">
+                                                                    {{ item.quantity }}
+                                                                </span>
+                                                                <button 
+                                                                    @click="updateQuantity(item.id, 1)"
+                                                                    class="btn btn-outline-secondary btn-sm"
+                                                                >
+                                                                    <i class="fas fa-plus"></i>
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <span class="fw-bold text-primary">\${{ (item.price * item.quantity).toFixed(2) }}</span>
+                                                        </td>
+                                                        <td class="align-middle">
+                                                            <button 
+                                                                @click="removeItem(item.id)"
+                                                                class="btn btn-outline-danger btn-sm"
+                                                                title="Remove item"
+                                                            >
+                                                                <i class="fas fa-trash"></i>
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                    </div>
+                                    <div class="card-footer">
+                                        <div class="row align-items-center">
+                                            <div class="col-md-6">
+                                                <router-link to="/products" class="btn btn-outline-primary">
+                                                    <i class="fas fa-arrow-left me-2"></i>Continue Shopping
+                                                </router-link>
+                                            </div>
+                                            <div class="col-md-6 text-end">
+                                                <h4 class="mb-0">
+                                                    Total: <span class="text-primary">\${{ cartStore.getTotalPrice().toFixed(2) }}</span>
+                                                </h4>
+                                                <button class="btn btn-success btn-lg mt-2">
+                                                    <i class="fas fa-credit-card me-2"></i>Proceed to Checkout
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Contact Component
+        const Contact = {
+            setup() {
+                const formData = reactive({
+                    name: '',
+                    email: '',
+                    message: ''
+                });
+                
+                const errors = reactive({
+                    name: '',
+                    email: '',
+                    message: ''
+                });
+                
+                const showSuccess = ref(false);
+
+                const validateForm = () => {
+                    let isValid = true;
+                    
+                    // Reset errors
+                    errors.name = '';
+                    errors.email = '';
+                    errors.message = '';
+                    
+                    // Validate name
+                    if (!formData.name.trim()) {
+                        errors.name = 'Name is required';
+                        isValid = false;
+                    }
+                    
+                    // Validate email
+                    if (!formData.email.trim()) {
+                        errors.email = 'Email is required';
+                        isValid = false;
+                    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
+                        errors.email = 'Please enter a valid email address';
+                        isValid = false;
+                    }
+                    
+                    // Validate message
+                    if (!formData.message.trim()) {
+                        errors.message = 'Message is required';
+                        isValid = false;
+                    }
+                    
+                    return isValid;
+                };
+
+                const submitForm = () => {
+                    if (validateForm()) {
+                        showSuccess.value = true;
+                        // Reset form
+                        formData.name = '';
+                        formData.email = '';
+                        formData.message = '';
+                        
+                        // Hide success message after 5 seconds
+                        setTimeout(() => {
+                            showSuccess.value = false;
+                        }, 5000);
+                    }
+                };
+
+                return {
+                    formData,
+                    errors,
+                    showSuccess,
+                    submitForm
+                };
+            },
+            template: `
+                <div class="container mt-4">
+                    <div class="row justify-content-center">
+                        <div class="col-md-8">
+                            <div class="card">
+                                <div class="card-header">
+                                    <h2 class="mb-0">Contact Us</h2>
+                                </div>
+                                <div class="card-body">
+                                    <div v-if="showSuccess" class="alert alert-success" role="alert">
+                                        <i class="fas fa-check-circle me-2"></i>
+                                        <strong>Thank you for contacting us!</strong> We'll get back to you soon.
+                                    </div>
+
+                                    <p class="text-muted mb-4">Have a question or feedback? We'd love to hear from you!</p>
+
+                                    <form @submit.prevent="submitForm">
+                                        <div class="mb-3">
+                                            <label for="name" class="form-label">Name <span class="text-danger">*</span></label>
+                                            <input 
+                                                type="text" 
+                                                id="name"
+                                                v-model="formData.name"
+                                                class="form-control"
+                                                :class="{ 'is-invalid': errors.name }"
+                                                placeholder="Enter your full name"
+                                            >
+                                            <div v-if="errors.name" class="invalid-feedback">
+                                                {{ errors.name }}
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="email" class="form-label">Email <span class="text-danger">*</span></label>
+                                            <input 
+                                                type="email" 
+                                                id="email"
+                                                v-model="formData.email"
+                                                class="form-control"
+                                                :class="{ 'is-invalid': errors.email }"
+                                                placeholder="Enter your email address"
+                                            >
+                                            <div v-if="errors.email" class="invalid-feedback">
+                                                {{ errors.email }}
+                                            </div>
+                                        </div>
+
+                                        <div class="mb-3">
+                                            <label for="message" class="form-label">Message <span class="text-danger">*</span></label>
+                                            <textarea 
+                                                id="message"
+                                                v-model="formData.message"
+                                                class="form-control"
+                                                :class="{ 'is-invalid': errors.message }"
+                                                rows="5"
+                                                placeholder="Enter your message"
+                                            ></textarea>
+                                            <div v-if="errors.message" class="invalid-feedback">
+                                                {{ errors.message }}
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn btn-primary">
+                                            <i class="fas fa-paper-plane me-2"></i>Send Message
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+
+                            <!-- Contact Info -->
+                            <div class="row mt-4">
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 text-center">
+                                        <div class="card-body">
+                                            <i class="fas fa-map-marker-alt fa-2x text-primary mb-3"></i>
+                                            <h5>Address</h5>
+                                            <p class="text-muted">123 Shop Street<br>Commerce City, CC 12345</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 text-center">
+                                        <div class="card-body">
+                                            <i class="fas fa-phone fa-2x text-success mb-3"></i>
+                                            <h5>Phone</h5>
+                                            <p class="text-muted">+1 (555) 123-4567</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 mb-3">
+                                    <div class="card h-100 text-center">
+                                        <div class="card-body">
+                                            <i class="fas fa-envelope fa-2x text-info mb-3"></i>
+                                            <h5>Email</h5>
+                                            <p class="text-muted">info@vueshop.com</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `
+        };
+
+        // Router setup
+        const routes = [
+            { path: '/', component: Home },
+            { path: '/products', component: Products },
+            { path: '/about', component: About },
+            { path: '/cart', component: Cart },
+            { path: '/contact', component: Contact }
+        ];
+
+        const router = createRouter({
+            history: createWebHashHistory(),
+            routes
+        });
+
+        // Main App Component
+        const App = {
+            setup() {
+                return {
+                    cartStore
+                };
+            },
+            template: `
+                <div>
+                    <!-- Navbar -->
+                    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+                        <div class="container">
+                            <router-link to="/" class="navbar-brand">
+                                <i class="fas fa-store me-2"></i>Vue Shop
+                            </router-link>
+                            
+                            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                                <span class="navbar-toggler-icon"></span>
+                            </button>
+                            
+                            <div class="collapse navbar-collapse" id="navbarNav">
+                                <ul class="navbar-nav me-auto">
+                                    <li class="nav-item">
+                                        <router-link to="/" class="nav-link" active-class="active">
+                                            <i class="fas fa-home me-1"></i>Home
+                                        </router-link>
+                                    </li>
+                                    <li class="nav-item">
+                                        <router-link to="/products" class="nav-link" active-class="active">
+                                            <i class="fas fa-box me-1"></i>Products
+                                        </router-link>
+                                    </li>
+                                    <li class="nav-item">
+                                        <router-link to="/about" class="nav-link" active-class="active">
+                                            <i class="fas fa-info-circle me-1"></i>About
+                                        </router-link>
+                                    </li>
+                                    <li class="nav-item">
+                                        <router-link to="/contact" class="nav-link" active-class="active">
+                                            <i class="fas fa-envelope me-1"></i>Contact
+                                        </router-link>
+                                    </li>
+                                </ul>
+                                
+                                <ul class="navbar-nav">
+                                    <li class="nav-item">
+                                        <router-link to="/cart" class="nav-link position-relative" active-class="active">
+                                            <i class="fas fa-shopping-cart me-1"></i>Cart
+                                            <span v-if="cartStore.getCartCount() > 0" class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                                                {{ cartStore.getCartCount() }}
+                                            </span>
+                                        </router-link>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+                    </nav>
+
+                    <!-- Router View -->
+                    <router-view></router-view>
+
+                    <!-- Footer -->
+                    <footer class="bg-dark text-light mt-5 py-4">
+                        <div class="container">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h5>Vue Shop</h5>
+                                    <p class="mb-0">Your trusted online shopping destination.</p>
+                                </div>
+                                <div class="col-md-6 text-md-end">
+                                    <p class="mb-0">&copy; 2024 Vue Shop. All rights reserved.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </footer>
+                </div>
+            `
+        };
+
+        // Create and mount the app
+        createApp(App)
+            .use(router)
+            .mount('#app');
+    </script>
+</body>
+</html>
